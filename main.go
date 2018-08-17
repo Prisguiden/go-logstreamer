@@ -20,32 +20,26 @@ var _logseneElasticsearchURL = ""
 var _logseneToken = ""
 var _logType = ""
 var _debugMode = false
+var _indexMessage string
+var _newLineDelimiter = "\n"
 
 func sendBulk() (string, time.Duration) {
 	baseURL := _logseneElasticsearchURL
 	qurl := baseURL + "_bulk"
 
-	var desc = ELKActionDescription{Index: _logseneToken, Type: _logType}
-	var action = ELKAction{Index: desc}
-
-	bAction, errA := json.Marshal(action)
-	if errA != nil {
-		log.Println(errA)
-	}
 	//Performance gain: just use the byte[] instead of converting to string multiple times
-	payload := string(bAction)
+	payload := ""
 	for i := 0; i < len(queue); i++ {
 		var msg LogMessage
 		msg.Message.Text = queue[i] + string(i)
-		b, err := json.Marshal(msg)
+		msgString, err := json.Marshal(msg)
 		if err != nil {
 			log.Println(err)
 			continue
 		} else {
-			payload += "\n" + string(b)
+			payload += _indexMessage + _newLineDelimiter + string(msgString) + _newLineDelimiter
 		}
 	}
-
 	req, _ := http.NewRequest("POST", qurl, bytes.NewBufferString(payload))
 	body, elapsed := makeRequest(req)
 	if _debugMode {
@@ -107,6 +101,15 @@ func main() {
 	log.Println("Watch started")
 	if _pollAndDrainSeconds > 0 {
 		go startPolling(_pollAndDrainSeconds)
+	}
+
+	var desc = ELKActionDescription{Index: _logseneToken, Type: _logType}
+	var action = ELKAction{Index: desc}
+	bAction, errA := json.Marshal(action)
+	_indexMessage = string(bAction)
+	if err != nil {
+		log.Println(errA)
+		panic("Could not create indexMessage payload")
 	}
 
 	r := bufio.NewReader(os.Stdin)
